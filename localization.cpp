@@ -35,7 +35,7 @@ using namespace std;
 using namespace Common_tools;
 using namespace PCL_TOOLS;
 
-int m_para_icp_max_iterations = 200;
+int m_para_icp_max_iterations = 20;
 int m_maximum_allow_residual_block = 1e5;
 int m_if_motion_deblur = 1 ;
 int line_search_num = 5;
@@ -603,12 +603,15 @@ int main (int argc, char** argv)
 
     pcl::search::KdTree<PointType>::Ptr corner_kdtree( new pcl::search::KdTree<PointType>);
     pcl::search::KdTree<PointType>::Ptr surface_kdtree( new pcl::search::KdTree<PointType>);
-
+//    pcl::KdTreeFLANN<PointType> corner_kdtree;
+//    pcl::KdTreeFLANN<PointType> surface_kdtree;
 
 
     t_start=clock();
     corner_kdtree->setInputCloud (cornerstack);
     surface_kdtree->setInputCloud (surfacestack);
+//    corner_kdtree.setInputCloud (cornerstack);
+//    surface_kdtree.setInputCloud (surfacestack);
 
     t_end=clock();
     endtime=(double)(t_end-t_start)/CLOCKS_PER_SEC;
@@ -616,9 +619,21 @@ int main (int argc, char** argv)
 
     //pcl::PointXYZ searchPoint;
     t_start=clock();
+    std::string cornerpath="/home/beihai/catkin_ws/src/loam_livox/pcd/laserCloudCornerStack/";
+    std::string surfpath="/home/beihai/catkin_ws/src/loam_livox/pcd/laserCloudSurfStack/";
+
+//    for(int i=1;i<1000;i++)
+//    {
+//        pcl::PointCloud<PointType>::Ptr corner_t (new pcl::PointCloud<PointType>);
+//        pcl::io::loadPCDFile<PointType> (cornerpath+std::to_string(i)+".pcd", *corner_t);
+//        pcl::PointCloud<PointType>::Ptr surf_t (new pcl::PointCloud<PointType>);
+//        pcl::io::loadPCDFile<PointType> (surfpath+std::to_string(i)+".pcd", *surf_t);
+//        find_out_incremental_transfrom(cornerstack,surfacestack,corner_kdtree,surface_kdtree,corner_t,surf_t);
+
+//    }
     //find_out_incremental_transfrom(cornerstack,surfacestack,corner_kdtree,surface_kdtree,corner,surface);
     Local_map local;
-    local.local_map_creater(cornerstack,surfacestack,corner_kdtree,surface_kdtree,corner,surface);
+    local.icp_findtrans(cornerstack,surfacestack,corner_kdtree,surface_kdtree,corner,surface);
     t_end=clock();
     endtime=(double)(t_end-t_start)/CLOCKS_PER_SEC;
     cerr<<"calculate time:"<<endtime*1000<<"ms"<<endl;	//ms为单位
