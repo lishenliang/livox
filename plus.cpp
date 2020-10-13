@@ -20,8 +20,11 @@ int main()
 {
     pcl::PointCloud<PointType> cloud_1;
     pcl::PointCloud<PointType> cloud_2;
+    pcl::PointCloud<PointType> cloud_3;
+    pcl::PointCloud<PointType> cloud_4;
     pcl::PCDReader reader;
-    string rootdirPath = "/home/beihai/catkin_ws/src/loam_livox/pcd/surface/";
+    string surfPath = "/home/beihai/catkin_ws/src/loam_livox/pcd/surface/";
+    string cornerPath = "/home/beihai/catkin_ws/src/loam_livox/pcd/corner/";
 //    Eigen::Quaterniond rotation=Eigen::Quaterniond(0.999889,0.002404,0.0067009,0.013092);
 //    Eigen::Vector3d trans=Eigen::Vector3d(79.2074,1.11397,-0.85304);
 //    reader.read(rootdirPath,cloud_1);
@@ -35,13 +38,21 @@ int main()
 //	cloud_1[i].z=point_w.z();
 //	cloud_1[i].intensity=cloud_1[i].intensity;
 //    }
-    for(int i=1;i<=199;i++)
+    for(int i=5000;i<=5100;i++)
     {
-        reader.read(rootdirPath+to_string(i)+".pcd",cloud_1);
+        reader.read(surfPath+to_string(i)+".pcd",cloud_1);
         cloud_2=cloud_2+cloud_1;
-        cerr<<i;
+        //cerr<<i;
     }
     pcl::PCDWriter writer;
-    writer.write("surface200.pcd",cloud_2);
+    writer.write("surface5000_5100.pcd",cloud_2);
+
+    for(int i=5000;i<=5100;i++)
+    {
+        reader.read(cornerPath+to_string(i)+".pcd",cloud_3);
+        cloud_4=cloud_4+cloud_3;
+        //cerr<<i;
+    }
+    writer.write("corner5000_5100.pcd",cloud_4);
     return 0;
 }

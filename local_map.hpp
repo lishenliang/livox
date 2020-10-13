@@ -12,6 +12,9 @@
 #include <ceres/ceres.h>
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+
 
 //#include <eigen3/Eigen/Dense>
 #include "common.h"
@@ -37,7 +40,10 @@
 #include <pcl/common/impl/io.hpp>
 #include <pcl/registration/transformation_estimation_point_to_plane_lls.h>
 #include <pcl/common/transforms.h>
+#include <pcl/common/common.h>
+
 using namespace std;
+#define PI 3.1415926
 class Local_map
 {
     public:
@@ -45,6 +51,9 @@ class Local_map
     int numbers;
     int iter_num=0;
     float radius=0.3;
+
+    vector<double> initial_fitness_score;
+    vector<Eigen::Matrix4d,Eigen::aligned_allocator<Eigen::Matrix4d>> initial_trans_matrix;
 
     pcl::PCDWriter writer;
     Eigen::Matrix4d corner_transformation_matrix = Eigen::Matrix4d::Identity ();
@@ -226,14 +235,13 @@ class Local_map
         vector<double> fitness_score;
         vector<Eigen::Matrix4d,Eigen::aligned_allocator<Eigen::Matrix4d>> trans_matrix;
         //Eigen::Matrix4d trans_test=Eigen::Matrix4d::Identity ();
-        Eigen::Quaterniond quarter=Eigen::Quaterniond(-0.367821,0.0369714, -0.0113116, 0.929155).normalized();
-        Eigen::Vector3d translation=Eigen::Vector3d(26.839, 7.90814, 0.063199);
+        //Eigen::Quaterniond quarter=Eigen::Quaterniond(-0.367821,0.0369714, -0.0113116, 0.929155).normalized();
+        //Eigen::Vector3d translation=Eigen::Vector3d(26.839, 7.90814, 0.063199);
         Eigen::Isometry3d T=Eigen::Isometry3d::Identity();
-        T.rotate(quarter.toRotationMatrix());
-        T.pretranslate(translation);
+        //T.rotate(quarter.toRotationMatrix());
+        //T.pretranslate(translation);
         std::cout<<T.matrix()<<std::endl;
-        //26.7186 8.3168 0.141909 -0.0207449 0.0154103 -0.996751 0.0762847
-        ofstream OutFile("surfoutputpart_inialchange.txt"); //利用构造函数创建txt文本，并且打开该文本
+        ofstream OutFile("surfout_inialchange_tree.txt"); //利用构造函数创建txt文本，并且打开该文本
         pcl::PointCloud<PointType>::Ptr corner_trans (new pcl::PointCloud<PointType>);
         //Eigen::Matrix4d corner_t_curr = Eigen::Matrix4d::Identity ();
         Eigen::Matrix4d corner_t_hist = Eigen::Matrix4d::Identity ();
@@ -241,15 +249,16 @@ class Local_map
         std::string cornerpath="/home/beihai/catkin_ws/src/loam_livox/pcd/laserCloudSurfStack/";
         pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> corner_icp;
         corner_icp.setInputTarget(in_laser_cloud_surf_from_map);
-
+        corner_icp.setSearchMethodTarget(kdtree_surf_from_map,true);
         corner_icp.setMaxCorrespondenceDistance(0.6);//points >0.5m ignored
         corner_icp.setMaximumIterations (50);
         corner_icp.setTransformationEpsilon (1e-8);
         corner_icp.setEuclideanFitnessEpsilon (0.05);
 
-        for(int i=9961;i<12000;i++)
+        for(int i=1;i<13500;i++)
         {
             //print4x4Matrix (corner_t_curr);
+            cout<<"num: "<<i<<" ";
             Eigen::Matrix4f init_icp=Eigen::Matrix4f::Identity ();
             pcl::PointCloud<PointType>::Ptr corner_curr (new pcl::PointCloud<PointType>);
             pcl::io::loadPCDFile<PointType> (cornerpath+std::to_string(i)+".pcd", *corner_curr);
@@ -263,24 +272,22 @@ class Local_map
                 corner_icp.align(*corner_trans,init_icp);
                 if (corner_icp.hasConverged())
                 {
-                    cerr<<"converged"<<endl;
+                    //cerr<<"converged"<<endl;
                     fitness_score.push_back(corner_icp.getFitnessScore ());
-                    cerr<<"pushback score ok"<<endl;
-
-                    cerr<<trans_matrix.capacity()<<" "<<trans_matrix.size()<<endl;
+                    //cerr<<"pushback score ok"<<endl;
+                    cerr<<"B "<<trans_matrix.capacity()<<" "<<trans_matrix.size();
                     Eigen::Matrix4d trans_test=corner_icp.getFinalTransformation().cast<double>();
                     trans_matrix.push_back(trans_test);
-                    cerr<<trans_matrix.capacity()<<" "<<trans_matrix.size()<<endl;
+                    cerr<<"A "<<trans_matrix.capacity()<<" "<<trans_matrix.size();
 
-                    cerr<<"pushback trans ok"<<endl;
+                    //cerr<<"pushback trans ok"<<endl;
 
                     //std::cout << "\nICP has converged, score is " << corner_icp.getFitnessScore () << std::endl;
                     //corner_t_curr = corner_icp.getFinalTransformation().cast<double>();
                     //print4x4Matrix (corner_t_curr);
+                    std::cout << "score at"<<iter_num<<"is" << corner_icp.getFitnessScore ();
                     if((corner_icp.getFitnessScore ()>0.05)&&(iter_num<8))
                     {
-                        std::cout << "\nICP has converged, score is " << corner_icp.getFitnessScore () << std::endl;
-                        std::cerr<<"numid"<<i<<endl;
                         switch (iter_num) {
                         case 0:
                             init_icp(0,3)=-0.2;
@@ -325,29 +332,27 @@ class Local_map
                         default:
                             break;
                         }
-                        print4x4Matrix(corner_t_hist);
+                        //print4x4Matrix(corner_t_hist);
                         icp_continue=true;
                     }
                     else
                     {
-//                        std::cout << "\nICP has converged, score is " << corner_icp.getFitnessScore () << std::endl;
-//                        std::cerr<<"numid"<<i<<endl;
-                        cerr<<"end"<<endl;
+                        //cerr<<"end"<<endl;
                         icp_continue=false;
                     }
                 }
             }
 
             iter_num=0;
-            cerr<<trans_matrix.capacity()<<" "<<trans_matrix.size()<<endl;
+            //cerr<<trans_matrix.capacity()<<" "<<trans_matrix.size()<<endl;
             Eigen::Matrix4d corner_t_curr = trans_matrix[distance(begin(fitness_score),min_element(begin(fitness_score),end(fitness_score)))];
-            cout<<distance(begin(fitness_score),min_element(begin(fitness_score),end(fitness_score)))<<endl;
+            std::cout << "final score is "<<*min_element(begin(fitness_score),end(fitness_score));
+            cout<<"dis "<<distance(begin(fitness_score),min_element(begin(fitness_score),end(fitness_score)))<<endl;
             //corner_t_curr=trans_matrix[distance(begin(fitness_score),min_element(begin(fitness_score),end(fitness_score)))];
             icp_continue=true;
             fitness_score.clear();
             trans_matrix.clear();
             corner_t_hist=corner_t_curr*corner_t_hist;
-            //rotation_matrix=corner_t_hist(0:2,0:2);
             for(int i=0;i<3;i++)
             {
                 for(int j=0;j<3;j++)
@@ -402,36 +407,157 @@ class Local_map
 
         return 0;
     }
-//    int ptp_icp_findtrans(pcl::PointCloud< PointType >::Ptr in_laser_cloud_corner_from_map,
-//                      pcl::PointCloud< PointType >::Ptr in_laser_cloud_surf_from_map,
-//                      pcl::search::KdTree<PointType>::Ptr   kdtree_corner_from_map,
-//                      pcl::search::KdTree<PointType>::Ptr   kdtree_surf_from_map,
-//                      pcl::PointCloud< PointType >::Ptr laserCloudCornerStack,
-//                      pcl::PointCloud< PointType >::Ptr laserCloudSurfStack )
-//    {
+    int find_initial(pcl::PointCloud< PointType >::Ptr in_laser_cloud_corner_from_map,
+                      pcl::PointCloud< PointType >::Ptr in_laser_cloud_surf_from_map,
+                      pcl::search::KdTree<PointType>::Ptr   kdtree_corner_from_map,
+                      pcl::search::KdTree<PointType>::Ptr   kdtree_surf_from_map,
+                      pcl::PointCloud< PointType >::Ptr laserCloudCornerStack,
+                      pcl::PointCloud< PointType >::Ptr laserCloudSurfStack )
+    {
+        PointType min_p,max_p;
+        std::string cornerpath="/home/beihai/my_workspace/devel/lib/livox_aftermaped/corner5000_5100_filtered05.pcd";
 
-//        Eigen::Matrix4f corner_t_curr = Eigen::Matrix4f::Identity ();
-//        std::string cornerpath="/home/beihai/catkin_ws/src/loam_livox/pcd/laserCloudSurfStack/";
-//        //pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> corner_icp;
-//        pcl::registration::TransformationEstimationPointToPlaneLLS< pcl::PointXYZI, pcl::PointXYZI > ptp_icp;
-//        for(int i=1;i<100;i++)
+        pcl::PointCloud<PointType>::Ptr corner_in (new pcl::PointCloud<PointType>);
+        pcl::PointCloud<PointType>::Ptr corner_out (new pcl::PointCloud<PointType>);
+        pcl::PointCloud<PointType>::Ptr corner_filtered (new pcl::PointCloud<PointType>);
+
+        pcl::io::loadPCDFile<PointType> (cornerpath,*corner_in);
+
+        pcl::VoxelGrid<PointType> corner_filter;
+        corner_filter.setInputCloud (corner_in);
+        corner_filter.setLeafSize (0.5f, 0.5f, 0.5f);
+        corner_filter.filter (*corner_filtered);
+        std::cerr << "corner before filtering: " << corner_in->points.size()<< std::endl;
+        std::cerr << "corner after filtering: " << corner_filtered->points.size()<< std::endl;
+
+        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> initial_corner_icp;
+        initial_corner_icp.setInputTarget(in_laser_cloud_corner_from_map);
+        initial_corner_icp.setInputSource(corner_filtered);
+        initial_corner_icp.setSearchMethodTarget(kdtree_corner_from_map,true);
+        //initial_corner_icp.setMaxCorrespondenceDistance(0.6);//points >0.5m ignored
+        initial_corner_icp.setMaximumIterations (50);
+        initial_corner_icp.setTransformationEpsilon (1e-8);
+        initial_corner_icp.setEuclideanFitnessEpsilon (0.05);
+
+        pcl::getMinMax3D(*in_laser_cloud_corner_from_map,min_p,max_p);
+        //Eigen::Quaternionf quarter=Eigen::Quaternionf(1,0,0,0).normalized();
+        Eigen::Translation3f translation(15,26, 0);
+        //Eigen::Affine3f T=translation*quarter.toRotationMatrix();
+        //Eigen::Matrix4f init_guess=T.matrix();
+        //initial_corner_icp.align(*corner_out,init_guess);
+
+        Eigen::Matrix3d rotation_matrix;
+
+        for(int i=0;i<32;i++)
+        {
+            Eigen::AngleAxisd rotation_vector(i*PI/16,Eigen::Vector3d(0,0,1));
+            Eigen::Affine3f T=translation*rotation_vector.toRotationMatrix().cast<float>();
+            cout<<"euler: "<<rotation_vector.toRotationMatrix().eulerAngles(2,1,0).transpose()<<endl;
+            Eigen::Matrix4f init_guess=T.matrix();
+            initial_corner_icp.align(*corner_out,init_guess);
+            if (initial_corner_icp.hasConverged ())
+            {
+              std::cout << "\nNDT has converged, score is " << initial_corner_icp.getFitnessScore () << std::endl;
+              print4x4Matrix (initial_corner_icp.getFinalTransformation ().cast<double>());
+            }
+        }
+//        for(int i=0;i<floor(max_p.x-min_p.x);i++)//floor(max_p.x-min_p.x)
 //        {
-//            //print4x4Matrix (corner_t_curr);
-//            pcl::PointCloud<PointType>::Ptr corner_curr (new pcl::PointCloud<PointType>);
-//            pcl::io::loadPCDFile<PointType> (cornerpath+std::to_string(i)+".pcd", *corner_curr);
-//            ptp_icp.estimateRigidTransformation(*corner_curr,*in_laser_cloud_surf_from_map,corner_t_curr);
-////            if (ptp_icp.hasConverged ())
-////            {
-////              std::cout << "\nICP has converged, score is " << ptp_icp.getFitnessScore () << std::endl;
-////              corner_t_curr = ptp_icp.getFinalTransformation ();
-////              //print4x4Matrixf (corner_t_curr);
-////              printf ("t = < %6.3f, %6.3f, %6.3f >\n\n", corner_t_curr (0, 3), corner_t_curr (1, 3), corner_t_curr (2, 3));
+//            for(int j=0;j<floor(max_p.y-min_p.y);j++)//floor(max_p.y-min_p.y)
+//            {
+            
+//                Eigen::Translation3f translation(min_p.x+i, min_p.y+j, 0);
+//                Eigen::Affine3f T=translation*quarter.toRotationMatrix();
+//                Eigen::Matrix4f init_guess=T.matrix();
+//                //print4x4Matrixf(init_guess);
+//                initial_corner_icp.align(*corner_out,init_guess);
+//                if (initial_corner_icp.hasConverged())
+//                {
+//                    initial_fitness_score.push_back(initial_corner_icp.getFitnessScore ());
+//                    initial_trans_matrix.push_back(initial_corner_icp.getFinalTransformation().cast<double>());
+//                    cout << "\nICP has converged, score is " << initial_corner_icp.getFitnessScore () << endl;
+//                }
 
 
-////            }
+//            }
+//        }
+//        Eigen::Matrix4d corner_t_best = initial_trans_matrix[distance(begin(initial_fitness_score),min_element(begin(initial_fitness_score),end(initial_fitness_score)))];
+//        std::cout << "best score is "<<*min_element(begin(initial_fitness_score),end(initial_fitness_score));
+//        print4x4Matrix(corner_t_best);
+//        cerr<<"capacity: "<<initial_trans_matrix.capacity()<<"size: "<<initial_trans_matrix.size();
+//        cout<<"min "<<min_p<<"max "<<max_p<<endl;
+
+
+//        Eigen::Quaterniond quarter=Eigen::Quaterniond(0.873471,-0.0190342, -0.0357623, -0.485188).normalized();
+//        Eigen::Vector3d translation=Eigen::Vector3d(14.9045, 25.8203, 0.121119);
+//        Eigen::Isometry3d T=Eigen::Isometry3d::Identity();
+//        T.rotate(quarter.toRotationMatrix());
+//        T.pretranslate(translation);
+//        Eigen::Matrix4d trans = Eigen::Matrix4d::Identity ();
+//        trans=T.matrix().inverse();
+//        print4x4Matrix(trans);
+
+//        std::string cornerpath="/home/beihai/my_workspace/devel/lib/livox_aftermaped/corner5000_5100.pcd";
+//        std::string surfpath="/home/beihai/my_workspace/devel/lib/livox_aftermaped/surface5000_5100.pcd";
+
+//        pcl::PointCloud<PointType>::Ptr corner_curr (new pcl::PointCloud<PointType>);
+//        pcl::PointCloud<PointType>::Ptr surf_curr (new pcl::PointCloud<PointType>);
+//        pcl::PointCloud<PointType>::Ptr corner_trans (new pcl::PointCloud<PointType>);
+//        pcl::PointCloud<PointType>::Ptr surf_trans (new pcl::PointCloud<PointType>);
+//        pcl::PointCloud<PointType>::Ptr corner_filtered (new pcl::PointCloud<PointType>);
+//        pcl::PointCloud<PointType>::Ptr surf_filtered (new pcl::PointCloud<PointType>);
+
+//        pcl::io::loadPCDFile<PointType> (cornerpath,*corner_curr);
+//        pcl::io::loadPCDFile<PointType> (surfpath,*surf_curr);
+
+//        pcl::transformPointCloud (*corner_curr, *corner_trans, trans);
+//        pcl::transformPointCloud (*surf_curr, *surf_trans, trans);
+
+//        pcl::VoxelGrid<PointType> corner_filter;
+//        corner_filter.setInputCloud (corner_trans);
+//        corner_filter.setLeafSize (0.5f, 0.5f, 0.5f);
+//        corner_filter.filter (*corner_filtered);
+//        std::cerr << "corner before filtering: " << corner_trans->points.size()<< std::endl;
+//        std::cerr << "corner after filtering: " << corner_filtered->points.size()<< std::endl;
+
+//        pcl::VoxelGrid<PointType> surf_filter;
+//        surf_filter.setInputCloud (surf_trans);
+//        surf_filter.setLeafSize (0.5f, 0.5f, 0.5f);
+//        surf_filter.filter (*surf_filtered);
+//        std::cerr << "surf before filtering: " << surf_trans->points.size()<< std::endl;
+//        std::cerr << "surf after filtering: " << surf_filtered->points.size()<< std::endl;
+//        pcl::PCDWriter writer;
+//        writer.write("corner5000_5100_filtered.pcd",*corner_filtered);
+//        writer.write("surf5000_5100_filtered.pcd",*surf_filtered);
+
+//        pcl::NormalDistributionsTransform<PointType, PointType> corner_ndt;
+//        pcl::NormalDistributionsTransform<PointType, PointType> surface_ndt;
+
+//        corner_ndt.setResolution(0.5);
+//        corner_ndt.setInputSource(corner_filtered);
+//        corner_ndt.setInputTarget(in_laser_cloud_corner_from_map);
+//        pcl::PointCloud<PointType>::Ptr ndt_cornerout (new pcl::PointCloud<PointType>);
+//        corner_ndt.align (*ndt_cornerout, init_ndtguess);
+//        if (corner_ndt.hasConverged ())
+//        {
+//          std::cout << "\nNDT has converged, score is " << corner_ndt.getFitnessScore () << std::endl;
+//          corner_ndttrans = corner_ndt.getFinalTransformation ().cast<double>();
+//          print4x4Matrix (corner_ndttrans);
+//        }
+
+//        surface_ndt.setResolution(1.0);
+//        surface_ndt.setInputSource(surf_filtered);
+//        surface_ndt.setInputTarget(in_laser_cloud_surf_from_map);
+//        pcl::PointCloud<PointType>::Ptr ndt_surfaceout (new pcl::PointCloud<PointType>);
+//        surface_ndt.align (*ndt_surfaceout, init_ndtguess);
+//        if (surface_ndt.hasConverged ())
+//        {
+//          std::cout << "\nNDT has converged, score is " << surface_ndt.getFitnessScore () << std::endl;
+//          surface_ndttrans = surface_ndt.getFinalTransformation ().cast<double>();
+//          print4x4Matrix (surface_ndttrans);
 //        }
 //        return 0;
-//    }
+    }
     Local_map()
     {
     }

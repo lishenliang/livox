@@ -633,7 +633,7 @@ int main (int argc, char** argv)
 //    }
     //find_out_incremental_transfrom(cornerstack,surfacestack,corner_kdtree,surface_kdtree,corner,surface);
     Local_map local;
-    local.icp_findtrans(cornerstack,surfacestack,corner_kdtree,surface_kdtree,corner,surface);
+    local.find_initial(cornerstack,surfacestack,corner_kdtree,surface_kdtree,corner,surface);
     t_end=clock();
     endtime=(double)(t_end-t_start)/CLOCKS_PER_SEC;
     cerr<<"calculate time:"<<endtime*1000<<"ms"<<endl;	//ms为单位
